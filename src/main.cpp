@@ -45,7 +45,7 @@ void setup() {
   LoRa.setSpreadingFactor(CFG_LORA_SF);
   LoRa.setSignalBandwidth(CFG_LORA_BW);
   LoRa.setCodingRate4(CFG_LORA_CR);
-  LoRa.setTxPower(CFG_LORA_ENABLE_CRC);
+  LoRa.setTxPower(CFG_LORA_PWR);
   if (CFG_LORA_ENABLE_CRC) {
     LoRa.enableCrc();
   }
@@ -75,7 +75,8 @@ void loop() {
   } else if (udp.parsePacket() > 0){
       onUdpDataAvailable();
   }
-
+  
+  ArduinoOTA.handle();
   delay(LOOP_SLEEP_MS);
 }
 
