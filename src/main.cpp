@@ -237,8 +237,8 @@ void onSerialDataAvailable()
             // udp.printf("data: %s len: %d crc: %x", framedata, framelen, crc);
             // udp.printf("\n------------------------\n");
             // udp.endPacket();
-            // framedata[0] = '\0'; // clear
-            // framelen = 0;
+            framedata[0] = '\0'; // clear
+            framelen = 0;
           }
           kissResetState();
         }
