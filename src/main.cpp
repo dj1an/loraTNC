@@ -116,33 +116,43 @@ void kissResetState()
 void onRadioDataAvailable() 
 {
   digitalWrite(LED_PIN, HIGH);
-  Serial.write(KissMarker::Fend);
-  Serial.write(KissCmd::Data);
 
   while (LoRa.available()) {
     byte rxByte = LoRa.read();
     loraRxBuffer[loraRxBufferLen] = rxByte;
     loraRxBufferLen++;
-    //udp.printf("%x ", rxByte);
+  }
 
-    if (rxByte == KissMarker::Fend) {
+  // write rx data to Serial, cut 2 bytes CRC
+  Serial.write(KissMarker::Fend);
+  Serial.write(KissCmd::Data);
+  for (size_t i = 0; i < loraRxBufferLen-2; i++) {
+    if (loraRxBuffer[i] == KissMarker::Fend) {
       Serial.write(KissMarker::Fesc);
       Serial.write(KissMarker::Tfend);
     }
-    else if (rxByte == KissMarker::Fesc) {
+    else if (loraRxBuffer[i] == KissMarker::Fesc) {
       Serial.write(KissMarker::Fesc);
       Serial.write(KissMarker::Tfesc);
     }
     else {
-      Serial.write(rxByte);
+      Serial.write(loraRxBuffer[i]);
     }
   }
-
   Serial.write(KissMarker::Fend);
 
+
+  loraRxBuffer[loraRxBufferLen] = '\0';
   //debug
-  // udp.beginPacket(udpAddress,udpPort);
-  // udp.printf("Lora Rx: ");
+  // udp.beginPacket("255.255.255.255",3333);
+  // udp.printf("Lora Rx: len:%d\n", loraRxBufferLen);
+  // for (size_t i = 0; i < loraRxBufferLen; i++) {
+  //   udp.printf("%x ", loraRxBuffer[i]);
+  // }
+  // uint16_t crc = ax25crc16(loraRxBuffer,  loraRxBufferLen-2);
+  // uint8_t crchi = (uint8_t)(crc >> 8); // high byte
+  // uint8_t crclo = (uint8_t)(crc); // low byte
+  // udp.printf("\ncrc: %x %x\n", crchi, crclo);
   // udp.printf("\n------------------------\n");
   // udp.endPacket();
 
@@ -333,21 +343,21 @@ void initWiFi() {
 
 
 uint16_t ax25crc16(unsigned char *data_p, uint16_t length) {
-    uint16_t crc = 0xFFFF;
-    uint32_t data;
-    uint16_t crc16_table[] = {
-            0x0000, 0x1081, 0x2102, 0x3183,
-            0x4204, 0x5285, 0x6306, 0x7387,
-            0x8408, 0x9489, 0xa50a, 0xb58b,
-            0xc60c, 0xd68d, 0xe70e, 0xf78f
-    };
+  uint16_t crc = 0xFFFF;
+  uint32_t data;
+  uint16_t crc16_table[] = {
+          0x0000, 0x1081, 0x2102, 0x3183,
+          0x4204, 0x5285, 0x6306, 0x7387,
+          0x8408, 0x9489, 0xa50a, 0xb58b,
+          0xc60c, 0xd68d, 0xe70e, 0xf78f
+  };
 
-    while(length--){
-        crc = ( crc >> 4 ) ^ crc16_table[(crc & 0xf) ^ (*data_p & 0xf)];
-        crc = ( crc >> 4 ) ^ crc16_table[(crc & 0xf) ^ (*data_p++ >> 4)];
-    }
+  while(length--){
+      crc = ( crc >> 4 ) ^ crc16_table[(crc & 0xf) ^ (*data_p & 0xf)];
+      crc = ( crc >> 4 ) ^ crc16_table[(crc & 0xf) ^ (*data_p++ >> 4)];
+  }
 
-    data = crc;
-    crc = (crc << 8) | (data >> 8 & 0xff); // do byte swap here that is needed by AX25 standard
-    return (~crc);
+  data = crc;
+  crc = (crc << 8) | (data >> 8 & 0xff); // do byte swap here that is needed by AX25 standard
+  return (~crc);
 }
