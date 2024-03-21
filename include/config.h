@@ -1,3 +1,6 @@
+#ifndef CONFIG_H_
+#define CONFIG_H_
+
 enum KissMarker {
   Fend = 0xc0,
   Fesc = 0xdb,
@@ -39,6 +42,7 @@ enum KissCmd {
 #define CFG_LORA_PIN_MOSI     27
 #define CFG_LORA_PIN_MISO     19
 #define CFG_LORA_PIN_SCK      5
+#define CFG_LORA_PIN_DIO1     34
 
 //dev board
 // #define CFG_LORA_PIN_SS       5
@@ -48,10 +52,19 @@ enum KissCmd {
 // #define CFG_LORA_PIN_MISO     19
 // #define CFG_LORA_PIN_SCK      18
 
-#define CFG_LORA_FREQ         434.900E6
+// Heltec V3
+// #define CFG_LORA_PIN_SS       8
+// #define CFG_LORA_PIN_RST      12
+// #define CFG_LORA_PIN_DIO0     13 // "Busy" Pin?
+// #define CFG_LORA_PIN_MOSI     10
+// #define CFG_LORA_PIN_MISO     11
+// #define CFG_LORA_PIN_SCK      9
+// #define CFG_LORA_PIN_DIO1     14
+
+#define CFG_LORA_FREQ         434.9 //434.900E6
 #define CFG_LORA_SYNC_WORD    0x12
-#define CFG_LORA_BW           125e3
-#define CFG_LORA_SF           12
+#define CFG_LORA_BW           125.0 //125e3
+#define CFG_LORA_SF           8
 #define CFG_LORA_CR           5
 #define CFG_LORA_PWR          17
 #define CFG_LORA_ENABLE_CRC   true
@@ -66,3 +79,6 @@ enum KissCmd {
 #define AXUDP_SEND_PORT 9001
 #define AXUDP_TARGET "192.168.2.197"
 #define OTA_HOSTNAME "loraTNC"
+
+#endif
+

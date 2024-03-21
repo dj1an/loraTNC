@@ -1,5 +1,5 @@
 #include <SPI.h>
-#include <LoRa.h>
+#include <RadioLib.h>
 #include "config.h"
 #include <WiFi.h>
 #include <ESPmDNS.h>
@@ -31,25 +31,84 @@ byte csmaP_ = DEFAULT_P;
 long csmaSlotTime_ = DEFAULT_SLOT_TIME;
 long csmaSlotTimePrev_ = 0;
 
+int transmissionState = RADIOLIB_ERR_NONE;
+// flag to indicate that a packet was sent
+volatile bool transmittedFlag = false;
+volatile bool receivedFlag = false;
+volatile bool operationDone = false;
+
+void setTxFlag(void);
+void setRxFlag(void);
+void setFlag(void);
+void radioloop(); 
+
+//SPIClass spi(VSPI);
+//SPISettings spiSettings(200000, MSBFIRST, SPI_MODE0);
+//SX1278 radio = new Module(CFG_LORA_PIN_SS, CFG_LORA_PIN_DIO0, CFG_LORA_PIN_RST, CFG_LORA_PIN_DIO1, spi, spiSettings);
+
+#ifdef HELTEC_V3
+SX1262 radio = new Module(CFG_LORA_PIN_SS, CFG_LORA_PIN_DIO1, CFG_LORA_PIN_RST, CFG_LORA_PIN_DIO0);
+#else
+SX1278 radio = new Module(CFG_LORA_PIN_SS, CFG_LORA_PIN_DIO0, CFG_LORA_PIN_RST, CFG_LORA_PIN_DIO1);
+#endif
+
+
 void setup() {
   Serial.begin(CFG_BAUDRATE);
   while (!Serial);
-  
+  #ifdef HELTEC_V3
   SPI.begin(CFG_LORA_PIN_SCK, CFG_LORA_PIN_MISO, CFG_LORA_PIN_MOSI, CFG_LORA_PIN_SS);
-  LoRa.setPins(CFG_LORA_PIN_SS, CFG_LORA_PIN_RST, CFG_LORA_PIN_DIO0);
+  #else
+  SPI.begin(CFG_LORA_PIN_SCK, CFG_LORA_PIN_MISO, CFG_LORA_PIN_MOSI, CFG_LORA_PIN_SS); //SCLK, MISO, MOSI, SS
+  #endif
+
+  //radio = new Module(CFG_LORA_PIN_SS, CFG_LORA_PIN_DIO0, CFG_LORA_PIN_RST, CFG_LORA_PIN_DIO1);
   
-  while (!LoRa.begin(CFG_LORA_FREQ)) {
-    delay(CONN_RETRY_SLEEP_MS);
-  }
-  LoRa.setSyncWord(CFG_LORA_SYNC_WORD);
-  LoRa.setSpreadingFactor(CFG_LORA_SF);
-  LoRa.setSignalBandwidth(CFG_LORA_BW);
-  LoRa.setCodingRate4(CFG_LORA_CR);
-  LoRa.setTxPower(CFG_LORA_PWR);
-  if (CFG_LORA_ENABLE_CRC) {
-    LoRa.enableCrc();
+  //LoRa.setPins(CFG_LORA_PIN_SS, CFG_LORA_PIN_RST, CFG_LORA_PIN_DIO0);
+  
+  // while (!LoRa.begin(CFG_LORA_FREQ)) {
+  //   delay(CONN_RETRY_SLEEP_MS);
+  // }
+  // LoRa.setSyncWord(CFG_LORA_SYNC_WORD);
+  // LoRa.setSpreadingFactor(CFG_LORA_SF);
+  // LoRa.setSignalBandwidth(CFG_LORA_BW);
+  // LoRa.setCodingRate4(CFG_LORA_CR);
+  // LoRa.setTxPower(CFG_LORA_PWR);
+  // if (CFG_LORA_ENABLE_CRC) {
+  //   LoRa.enableCrc();
+  // }
+
+  // initialize SX1278 with default settings
+  Serial.print(F("[SX1278] Initializing ... "));
+  int state = radio.begin(CFG_LORA_FREQ, CFG_LORA_BW, CFG_LORA_SF, CFG_LORA_CR, CFG_LORA_SYNC_WORD, CFG_LORA_PWR, 8, 0);
+  
+  if (state == RADIOLIB_ERR_NONE) {
+    Serial.println(F("success!"));
+    radio.setCRC(true);
+    //radio.setPacketSentAction(setTxFlag);
+    //radio.setPacketReceivedAction(setRxFlag);
+    #ifdef HELTEC_V3
+      radio.setDio1Action(setFlag);
+    #else
+      radio.setDio0Action(setFlag, RISING);
+    #endif
+  } else {
+    Serial.print(F("failed, code "));
+    Serial.println(state);
+    //while (true);
   }
 
+  // start listening for LoRa packets
+  Serial.print(F("[SX1278] Starting to listen ... "));
+  state = radio.startReceive();
+  if (state == RADIOLIB_ERR_NONE) {
+    Serial.println(F("success!"));
+  } else {
+    Serial.print(F("failed, code "));
+    Serial.println(state);
+    while (true);
+  }
+  
   initWiFi();
   Serial.print("Wifi RSSI: ");
   Serial.println(WiFi.RSSI());
@@ -62,9 +121,11 @@ void setup() {
   digitalWrite(LED_PIN, HIGH);  delay(300);  digitalWrite(LED_PIN, LOW);
 }
 
-void loop() { 
+void loop() {
+  radioloop(); 
   long currentTime = millis();
-  if (LoRa.parsePacket() > 0) {
+  //if (LoRa.parsePacket() > 0) {
+    if (false){
     onRadioDataAvailable();
   } else if (currentTime > csmaSlotTimePrev_ + csmaSlotTime_ && random(0, 255) < csmaP_) {
     if (Serial.available()) {
@@ -94,15 +155,18 @@ void onUdpDataAvailable(){
     return;
   }
 
-  LoRa.beginPacket();
+  //LoRa.beginPacket();
   //uint16_t crc = ax25crc16(framedata,  framelen);
-  for (size_t i = 0; i < len; i++) {
-    LoRa.write(udpRxBuffer[i]);
-  }
+  // for (size_t i = 0; i < len; i++) {
+  //   LoRa.write(udpRxBuffer[i]);
+  // }
 
   //LoRa.write((uint8_t)(crc >> 8)); // high byte
   //LoRa.write((uint8_t)(crc)); // low byte
-  LoRa.endPacket();
+  //LoRa.endPacket();
+
+  transmissionState = radio.startTransmit(udpRxBuffer, len);
+  transmittedFlag = true;
   digitalWrite(LED_PIN, LOW);
 }
 
@@ -117,11 +181,12 @@ void onRadioDataAvailable()
 {
   digitalWrite(LED_PIN, HIGH);
 
-  while (LoRa.available()) {
-    byte rxByte = LoRa.read();
-    loraRxBuffer[loraRxBufferLen] = rxByte;
-    loraRxBufferLen++;
-  }
+  //while (LoRa.available()) {
+  // while (false){
+  //   byte rxByte = LoRa.read();
+  //   loraRxBuffer[loraRxBufferLen] = rxByte;
+  //   loraRxBufferLen++;
+  // }
 
   // write rx data to Serial, cut 2 bytes CRC
   Serial.write(KissMarker::Fend);
@@ -230,16 +295,22 @@ void onSerialDataAvailable()
             } else {
               // dont split
 
-              LoRa.beginPacket();
+              // LoRa.beginPacket();
               uint16_t crc = ax25crc16(framedata,  framelen);
-              for (size_t i = 0; i < framelen; i++) {
-                LoRa.write(framedata[i]);
-              }
-              // add ax25 crc
-              LoRa.write((uint8_t)(crc >> 8)); // high byte
-              LoRa.write((uint8_t)(crc)); // low byte
-              LoRa.endPacket();
+              framedata[framelen] = (uint8_t)(crc >> 8); // high byte
+              framelen++;
+              framedata[framelen] = (uint8_t)(crc); // low byte
+              framelen++;
+              // for (size_t i = 0; i < framelen; i++) {
+              //   LoRa.write(framedata[i]);
+              // }
+              // // add ax25 crc
+              // LoRa.write((uint8_t)(crc >> 8)); // high byte
+              // LoRa.write((uint8_t)(crc)); // low byte
+              // LoRa.endPacket();
 
+              transmissionState = radio.startTransmit(framedata, framelen);
+              transmittedFlag = true;
             }
 
             // debug
@@ -361,3 +432,123 @@ uint16_t ax25crc16(unsigned char *data_p, uint16_t length) {
   crc = (crc << 8) | (data >> 8 & 0xff); // do byte swap here that is needed by AX25 standard
   return (~crc);
 }
+
+
+// this function is called when a complete packet
+// is transmitted by the module
+// IMPORTANT: this function MUST be 'void' type
+//            and MUST NOT have any arguments!
+#if defined(ESP8266) || defined(ESP32)
+  ICACHE_RAM_ATTR
+#endif
+void setTxFlag(void) {
+  // we sent a packet, set the flag
+  transmittedFlag = true;
+}
+
+// this function is called when a complete packet
+// is received by the module
+// IMPORTANT: this function MUST be 'void' type
+//            and MUST NOT have any arguments!
+#if defined(ESP8266) || defined(ESP32)
+  ICACHE_RAM_ATTR
+#endif
+void setRxFlag(void) {
+  // we got a packet, set the flag
+  receivedFlag = true;
+}
+
+// this function is called when a complete packet
+// is transmitted or received by the module
+// IMPORTANT: this function MUST be 'void' type
+//            and MUST NOT have any arguments!
+#if defined(ESP8266) || defined(ESP32)
+  ICACHE_RAM_ATTR
+#endif
+void setFlag(void) {
+  // we sent or received  packet, set the flag
+  operationDone = true;
+}
+
+void radioloop(){
+  
+if (operationDone){
+  operationDone = false;
+
+  if(transmittedFlag) {
+    // reset flag
+    transmittedFlag = false;
+
+    if (transmissionState == RADIOLIB_ERR_NONE) {
+      // packet was successfully sent
+      Serial.println(F("transmission finished!"));
+
+      // NOTE: when using interrupt-driven transmit method,
+      //       it is not possible to automatically measure
+      //       transmission data rate using getDataRate()
+
+    } else {
+      Serial.print(F("Tx failed, code "));
+      Serial.println(transmissionState);
+
+    }
+
+    // clean up after transmission is finished
+    // this will ensure transmitter is disabled,
+    // RF switch is powered down etc.
+    radio.finishTransmit();
+    radio.startReceive();
+  } else {
+    
+    //if(receivedFlag) {
+    // reset flag
+    //receivedFlag = false;
+
+    // you can read received data as an Arduino String
+    //String str;
+    //int state = radio.readData(str);
+
+    // you can also read received data as byte array
+    
+      //byte byteArr[8];
+      loraRxBufferLen = radio.getPacketLength();
+      int state = radio.readData(loraRxBuffer, loraRxBufferLen);
+    
+    
+    if (state == RADIOLIB_ERR_NONE) {
+      // packet was successfully received
+      Serial.println(F("[SX1278] Received packet!"));
+
+      // print data of the packet
+      Serial.print(F("[SX1278] Data:\t\t"));
+      //Serial.println(str);
+      onRadioDataAvailable();
+      // print RSSI (Received Signal Strength Indicator)
+      Serial.print(F("[SX1278] RSSI:\t\t"));
+      Serial.print(radio.getRSSI());
+      Serial.println(F(" dBm"));
+
+      // print SNR (Signal-to-Noise Ratio)
+      Serial.print(F("[SX1278] SNR:\t\t"));
+      Serial.print(radio.getSNR());
+      Serial.println(F(" dB"));
+
+      // print frequency error
+      Serial.print(F("[SX1278] Frequency error:\t"));
+      Serial.print(radio.getFrequencyError());
+      Serial.println(F(" Hz"));
+
+    } else if (state == RADIOLIB_ERR_CRC_MISMATCH) {
+      // packet was received, but is malformed
+      Serial.println(F("[SX1278] CRC error!"));
+
+    } else {
+      // some other error occurred
+      Serial.print(F("[SX1278] Failed, code "));
+      Serial.println(state);
+
+    }
+  }
+}
+}
+
