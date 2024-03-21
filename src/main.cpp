@@ -56,11 +56,8 @@ SX1278 radio = new Module(CFG_LORA_PIN_SS, CFG_LORA_PIN_DIO0, CFG_LORA_PIN_RST, 
 void setup() {
   Serial.begin(CFG_BAUDRATE);
   while (!Serial);
-  #ifdef HELTEC_V3
-  SPI.begin(CFG_LORA_PIN_SCK, CFG_LORA_PIN_MISO, CFG_LORA_PIN_MOSI, CFG_LORA_PIN_SS);
-  #else
+
   SPI.begin(CFG_LORA_PIN_SCK, CFG_LORA_PIN_MISO, CFG_LORA_PIN_MOSI, CFG_LORA_PIN_SS); //SCLK, MISO, MOSI, SS
-  #endif
 
   //radio = new Module(CFG_LORA_PIN_SS, CFG_LORA_PIN_DIO0, CFG_LORA_PIN_RST, CFG_LORA_PIN_DIO1);
   
@@ -79,7 +76,7 @@ void setup() {
   // }
 
   // initialize SX1278 with default settings
-  Serial.print(F("[SX1278] Initializing ... "));
+  Serial.print(F("[SX12xx] Initializing ... "));
   int state = radio.begin(CFG_LORA_FREQ, CFG_LORA_BW, CFG_LORA_SF, CFG_LORA_CR, CFG_LORA_SYNC_WORD, CFG_LORA_PWR, 8, 0);
   
   if (state == RADIOLIB_ERR_NONE) {
@@ -99,7 +96,7 @@ void setup() {
   }
 
   // start listening for LoRa packets
-  Serial.print(F("[SX1278] Starting to listen ... "));
+  Serial.print(F("[SX12xx] Starting to listen ... "));
   state = radio.startReceive();
   if (state == RADIOLIB_ERR_NONE) {
     Serial.println(F("success!"));
@@ -479,19 +476,20 @@ if (operationDone){
     // reset flag
     transmittedFlag = false;
 
-    if (transmissionState == RADIOLIB_ERR_NONE) {
-      // packet was successfully sent
-      Serial.println(F("transmission finished!"));
+    // no debug output because of KISS
+    // if (transmissionState == RADIOLIB_ERR_NONE) {
+    //   // packet was successfully sent
+    //   Serial.println(F("transmission finished!"));
 
-      // NOTE: when using interrupt-driven transmit method,
-      //       it is not possible to automatically measure
-      //       transmission data rate using getDataRate()
+    //   // NOTE: when using interrupt-driven transmit method,
+    //   //       it is not possible to automatically measure
+    //   //       transmission data rate using getDataRate()
 
-    } else {
-      Serial.print(F("Tx failed, code "));
-      Serial.println(transmissionState);
+    // } else {
+    //   Serial.print(F("Tx failed, code "));
+    //   Serial.println(transmissionState);
 
-    }
+    // }
 
     // clean up after transmission is finished
     // this will ensure transmitter is disabled,
@@ -517,36 +515,36 @@ if (operationDone){
     
     if (state == RADIOLIB_ERR_NONE) {
       // packet was successfully received
-      Serial.println(F("[SX1278] Received packet!"));
+      //Serial.println(F("[SX1278] Received packet!"));
 
       // print data of the packet
-      Serial.print(F("[SX1278] Data:\t\t"));
+      //Serial.print(F("[SX1278] Data:\t\t"));
       //Serial.println(str);
       onRadioDataAvailable();
       // print RSSI (Received Signal Strength Indicator)
-      Serial.print(F("[SX1278] RSSI:\t\t"));
-      Serial.print(radio.getRSSI());
-      Serial.println(F(" dBm"));
+      // Serial.print(F("[SX1278] RSSI:\t\t"));
+      // Serial.print(radio.getRSSI());
+      // Serial.println(F(" dBm"));
 
       // print SNR (Signal-to-Noise Ratio)
-      Serial.print(F("[SX1278] SNR:\t\t"));
-      Serial.print(radio.getSNR());
-      Serial.println(F(" dB"));
+      // Serial.print(F("[SX1278] SNR:\t\t"));
+      // Serial.print(radio.getSNR());
+      // Serial.println(F(" dB"));
 
       // print frequency error
-      Serial.print(F("[SX1278] Frequency error:\t"));
-      Serial.print(radio.getFrequencyError());
-      Serial.println(F(" Hz"));
+      // Serial.print(F("[SX1278] Frequency error:\t"));
+      // Serial.print(radio.getFrequencyError());
+      // Serial.println(F(" Hz"));
 
     } else if (state == RADIOLIB_ERR_CRC_MISMATCH) {
       // packet was received, but is malformed
-      Serial.println(F("[SX1278] CRC error!"));
-
+      //Serial.println(F("[SX1278] CRC error!"));
+      return;
     } else {
       // some other error occurred
-      Serial.print(F("[SX1278] Failed, code "));
-      Serial.println(state);
-
+      // Serial.print(F("[SX1278] Failed, code "));
+      // Serial.println(state);
+      return;
     }
   }
 }
